@@ -49,6 +49,7 @@ const (
 	ContainerRuntimeDocker     = "docker"
 	ContainerRuntimeContainerd = "containerd"
 	ContainerRuntimePouch      = "pouch"
+	ContainerRuntimeDefault    = "default"
 )
 
 type runtimeConfig struct {
@@ -106,6 +107,12 @@ func NewFactory(varRunPath string, accountManager daemonutil.ImagePullAccountMan
 				continue
 			}
 			imageService, err = runtimeimage.NewContainerdImageService(conn, accountManager)
+			if err != nil {
+				klog.Warningf("Failed to new image service for %v (%s, %s): %v", cfg.runtimeType, cfg.runtimeURI, cfg.runtimeRemoteURI, err)
+				continue
+			}
+		case ContainerRuntimeDefault:
+			imageService, err = runtimeimage.NewCriImageService(cfg.runtimeRemoteURI, accountManager)
 			if err != nil {
 				klog.Warningf("Failed to new image service for %v (%s, %s): %v", cfg.runtimeType, cfg.runtimeURI, cfg.runtimeRemoteURI, err)
 				continue
@@ -197,7 +204,7 @@ func detectRuntime(varRunPath string) []runtimeConfig {
 		}
 	}
 
-	// other implements of cri, include containerd, crio
+	// containerd
 	{
 		if _, err = os.Stat(fmt.Sprintf("%s/containerd.sock", varRunPath)); err == nil {
 			cfgs = append(cfgs, runtimeConfig{
@@ -211,9 +218,13 @@ func detectRuntime(varRunPath string) []runtimeConfig {
 				runtimeRemoteURI: fmt.Sprintf("unix://%s/containerd/containerd.sock", varRunPath),
 			})
 		}
+	}
+
+	// other implements of cri, include crio
+	{
 		if _, err = os.Stat(fmt.Sprintf("%s/crio.sock", varRunPath)); err == nil {
 			cfgs = append(cfgs, runtimeConfig{
-				runtimeType:      ContainerRuntimeContainerd,
+				runtimeType:      ContainerRuntimeDefault,
 				runtimeRemoteURI: fmt.Sprintf("unix://%s/crio.sock", varRunPath),
 			})
 		}
